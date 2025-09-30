@@ -1,0 +1,202 @@
+Frameworks_Assignment/
+
+├─ data/
+│  └─ metadata_sample.csv   
+├─ notebooks/
+│  └─ part1_exploration.ipynb
+│  └─ part2_cleaning.ipynb
+│  └─ part3_analysis.ipynb
+├─ app/
+│  └─ streamlit_app.py
+├─ requirements.txt
+├─ README.md
+└─ reflection.md
+
+part 1 requirements.txt
+pandas
+matplotlib
+seaborn
+streamlit
+wordcloud
+jupyter
+
+
+ 3️ reflection.md
+markdown
+ Reflection
+
+ Challenges
+- The dataset was very large; I had to work with a sample to avoid memory issues.
+- Missing values in `publish_time` and `journal` required careful handling.
+- Parsing dates sometimes failed due to unusual formats.
+
+ Insights
+- A surge in publications occurred in 2020–2021, showing global research response to COVID-19.
+- Certain journals dominated COVID-19 publications.
+- Title word frequency highlighted key terms like “covid-19,” “sars-cov-2,” and “pandemic.”
+
+ Learning
+- Gained practice cleaning messy real-world data.
+- Learned to create visualizations to summarize data.
+- Built my first Streamlit app for interactive exploration.
+
+
+ part 4 notebooks/part1_exploration.ipynb
+Part 1: Data Loading and Basic Exploration
+
+import pandas as pd
+
+Load metadata sample (replace with metadata.csv if available)
+df = pd.read_csv('../data/metadata_sample.csv', low_memory=False)
+
+Inspect dataset
+print("Shape:", df.shape)
+print("\nColumns:", df.columns.tolist())
+
+ First few rows
+df.head()
+
+ Data info
+df.info()
+
+ Missing values
+df.isnull().sum().head(20)
+
+ Basic stats
+df.describe(include='all').T
+
+
+part 5
+Data Cleaning and Preparation
+
+import pandas as pd
+import numpy as np
+
+df = pd.read_csv('../data/metadata_sample.csv', low_memory=False)
+
+ Parse publish_time
+df['publish_time'] = pd.to_datetime(df['publish_time'], errors='coerce')
+df['year'] = df['publish_time'].dt.year
+
+ Fill NaNs in text columns
+df['title'] = df['title'].fillna('')
+df['abstract'] = df['abstract'].fillna('')
+
+ Add word counts
+df['title_wc'] = df['title'].str.split().str.len()
+df['abstract_wc'] = df['abstract'].str.split().str.len()
+
+Drop useless rows (no title + no abstract)
+df = df[~((df['title'] == '') & (df['abstract'] == ''))]
+
+ Drop duplicates
+df = df.drop_duplicates(subset=['title','publish_time'])
+
+ Save cleaned data
+df.to_csv('../data/metadata_cleaned.csv', index=False)
+
+print("Cleaned dataset shape:", df.shape)
+df.head()
+
+
+part 6 notebooks/part3_analysis.ipynb
+  Data Analysis and Visualization
+
+import pandas as pd
+import matplotlib.pyplot as plt
+
+df = pd.read_csv('../data/metadata_cleaned.csv', low_memory=False)
+
+Publications by year
+year_counts = df['year'].value_counts().sort_index()
+year_counts.plot(kind='bar', figsize=(8,4))
+plt.title("Publications by Year")
+plt.xlabel("Year")
+plt.ylabel("Count")
+plt.show()
+
+Top Journals
+top_journals = df['journal'].fillna('Unknown').value_counts().head(15)
+top_journals.plot(kind='barh', figsize=(8,6))
+plt.title("Top Journals")
+plt.show()
+
+ Title word frequency 
+import re
+from collections import Counter
+
+titles = df['title'].str.lower().str.replace(r'[^a-z0-9\s]', ' ', regex=True)
+words = titles.str.split().explode().dropna()
+
+stopwords = set(["the","and","of","to","in","a","for","on","with","by","from","is","an","as","are","be","that","this","we"])
+words = words[~words.isin(stopwords)]
+
+top_words = words.value_counts().head(20)
+top_words.plot(kind='bar', figsize=(10,4))
+plt.title("Top Words in Titles")
+plt.show()
+
+
+part 7 app/streamlit_app.py
+import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
+import re
+
+st.set_page_config(page_title="CORD-19 Data Explorer", layout="wide")
+st.title("CORD-19 Data Explorer")
+st.write("Explore COVID-19 research papers metadata interactively.")
+
+@st.cache_data
+def load_data(path="data/metadata_sample.csv"):
+    df = pd.read_csv(path, low_memory=False)
+    df['publish_time'] = pd.to_datetime(df['publish_time'], errors='coerce')
+    df['year'] = df['publish_time'].dt.year
+    df['title'] = df['title'].fillna('')
+    df['abstract'] = df['abstract'].fillna('')
+    return df
+
+df = load_data()
+
+# Sidebar filters
+st.sidebar.header("Filters")
+year_min, year_max = int(df['year'].min()), int(df['year'].max())
+year_range = st.sidebar.slider("Year range", year_min, year_max, (year_min, year_max))
+journals = df['journal'].fillna('Unknown').value_counts().head(15).index.tolist()
+journal_filter = st.sidebar.multiselect("Select journals", journals)
+
+# Apply filters
+filtered = df[(df['year'] >= year_range[0]) & (df['year'] <= year_range[1])]
+if journal_filter:
+    filtered = filtered[filtered['journal'].fillna('Unknown').isin(journal_filter)]
+
+st.subheader("Publications by Year")
+year_counts = filtered['year'].value_counts().sort_index()
+fig, ax = plt.subplots()
+year_counts.plot(kind='bar', ax=ax)
+st.pyplot(fig)
+
+st.subheader("Top Journals")
+top_journals = filtered['journal'].fillna('Unknown').value_counts().head(10)
+st.bar_chart(top_journals)
+
+st.subheader("Top Title Words")
+titles = filtered['title'].str.lower().str.replace(r'[^a-z0-9\s]', ' ', regex=True).str.split().explode()
+stopwords = set(["the","and","of","to","in","a","for","on","with","by","from","is","an","as","are","be","that","this","we"])
+words = titles[~titles.isin(stopwords)]
+top_words = words.value_counts().head(20)
+st.bar_chart(top_words)
+
+st.subheader("Sample Data")
+st.dataframe(filtered.head(20))
+
+
+
+
+
+
+
+
+
+
+
